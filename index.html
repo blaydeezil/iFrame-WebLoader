@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Tab</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #e0e0e0; /* Light gray background */
+            margin: 0;
+            padding: 20px;
+            color: #333; /* Dark gray text */
+        }
+        h1, h2, h3 {
+            color: #424242; /* Darker gray for headings */
+        }
+        select, input[type="text"], button {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border: 1px solid #9e9e9e; /* Gray border */
+            width: calc(100% - 22px);
+            background-color: #ffffff; /* White background for inputs */
+            color: #333; /* Dark gray text for inputs */
+        }
+        button {
+            background-color: #757575; /* Medium gray for buttons */
+            color: white; /* White text on buttons */
+        }
+        button:hover {
+            background-color: #616161; /* Darker gray on hover */
+        }
+        #gameFrame {
+            width: 100%;
+            height: 600px; 
+            border: 5px solid #9e9e9e; /* Gray border for iframe */
+            border-radius: 10px; 
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            margin-top: 20px;
+            Background: White;
+        }
+        #settings {
+            margin-top: 20px;
+            background-color: white; /* White background for settings */
+            padding: 20px;
+            border-radius: 10px; 
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        .button-container {
+            display: flex; /* Use flexbox for horizontal layout */
+            gap: 10px; /* Space between buttons */
+        }
+        .game-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #bdbdbd; /* Light gray border between items */
+        }
+        .game-item:last-child {
+            border-bottom: none; 
+        }
+        #debugArea {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: white;
+            border-radius: 5px;
+            border: 1px solid #9e9e9e; /* Gray border for debug area */
+            height: 150px; /* Fixed height for debug area */
+            overflow-y: auto; /* Scroll if content overflows */
+        }
+    </style>
+</head>
+<body>
+
+<h1>Select a Game or Embed to Play</h1>
+<label for="game-select">Choose a game:</label>
+<select id="game-select" onchange="changeGame()">
+    <option value="">--Please choose an option--</option>
+</select>
+
+<div class="button-container">
+    <button onclick="toggleFullscreen()">Toggle Fullscreen (F11)</button>
+    <button onclick="refreshIframe()">Refresh Iframe (R)</button>
+    <button onclick="pauseIframe()">Pause Iframe (P)</button>
+    <button onclick="playIframe()">Play Iframe (L)</button>
+    <input type="file" id="fileInput" accept=".json" style="display:none;" onchange="importFromJSON(event)">
+    <button onclick="document.getElementById('fileInput').click()">Import from JSON</button>
+</div>
+
+<iframe id="gameFrame" src=""></iframe>
+
+<div id="settings">
+    <h2>Settings</h2>
+
+    <!-- Section for adding games -->
+    <h3>Add Game</h3>
+    <input type="text" id="newGameUrl" placeholder="Game URL" />
+    <input type="text" id="newGameName" placeholder="Game Name" />
+    <button onclick="addGame()">Add Game (A)</button>
+
+    <!-- Section for adding embeds -->
+    <h3>Add Embed</h3>
+    <input type="text" id="embedCode" placeholder="Embed Code (iframe)" />
+    <input type="text" id="embedName" placeholder="Embed Name" />
+    <button onclick="addEmbed()">Add Embed (E)</button>
+
+    <h3>Currently Added Content:</h3>
+    <div id="gameList"></div>
+</div>
+
+<div id="debugArea">
+    <h3>Debug Console</h3>
+    <div id="logOutput"></div>
+</div>
+
+<script>
+    let contentList = JSON.parse(localStorage.getItem('contentList')) || [];
+
+    function populateDropdown() {
+        const select = document.getElementById("game-select");
+        select.innerHTML = '<option value="">--Please choose an option--</option>'; 
+        contentList.forEach(content => {
+            const option = document.createElement("option");
+            option.value = content.url || ''; // Use url if it's a game
+            option.textContent = content.name || 'Embed'; // Use name or 'Embed'
+            select.appendChild(option);
+        });
+        updateGameList();
+    }
+
+    function changeGame() {
+        const select = document.getElementById("game-select");
+        const iframe = document.getElementById("gameFrame");
+        
+        const selectedContent = contentList[select.selectedIndex - 1]; // Adjust index due to default option
+        if (selectedContent) {
+          if (selectedContent.url) {
+              iframe.src = selectedContent.url; // Set URL for games
+          } else if (selectedContent.embed) {
+              iframe.srcdoc = selectedContent.embed; // Set embed code for embeds
+          }
+          logToDebugConsole(`Changed to ${selectedContent.name}`);
+      }
+    }
+
+    function toggleFullscreen() {
+        const iframe = document.getElementById("gameFrame");
+        if (iframe.requestFullscreen) {
+            iframe.requestFullscreen();
+        } else if (iframe.mozRequestFullScreen) { 
+            iframe.mozRequestFullScreen();
+        } else if (iframe.webkitRequestFullscreen) { 
+            iframe.webkitRequestFullscreen();
+        } else if (iframe.msRequestFullscreen) { 
+            iframe.msRequestFullscreen();
+        }
+        logToDebugConsole("Toggled fullscreen mode");
+    }
+
+    function refreshIframe() {
+        const iframe = document.getElementById("gameFrame");
+        iframe.src = iframe.src; // Reloads the iframe
+        logToDebugConsole("Refreshed iframe content");
+    }
+
+    function pauseIframe() {
+      const iframe = document.getElementById("gameFrame");
+      
+      if (iframe.src.includes("youtube.com")) {
+          iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+          logToDebugConsole("Paused YouTube video");
+      } else {
+          alert("Pause functionality only available for YouTube videos.");
+      }
+   }
+
+   function playIframe() {
+      const iframe = document.getElementById("gameFrame");
+      
+      if (iframe.src.includes("youtube.com")) {
+          iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+          logToDebugConsole("Played YouTube video");
+      } else {
+          alert("Play functionality only available for YouTube videos.");
+      }
+   }
+
+   function addGame() {
+       const newUrl = document.getElementById("newGameUrl").value.trim();
+       const newName = document.getElementById("newGameName").value.trim();
+
+       if (newUrl && newName) {
+           contentList.push({ name: newName, url: newUrl });
+           localStorage.setItem('contentList', JSON.stringify(contentList));
+           populateDropdown();
+           clearInputFields();
+           
+           logToDebugConsole(`Added new game "${newName}" with URL "${newUrl}"`);
+       } else {
+           alert('Please enter both a game name and URL.');
+       }
+   }
+
+   function addEmbed() {
+       const embedCode = document.getElementById("embedCode").value.trim();
+       const embedName = document.getElementById("embedName").value.trim();
+
+       if (embedCode && embedName) {
+           contentList.push({ name: embedName, embed: embedCode });
+           localStorage.setItem('contentList', JSON.stringify(contentList));
+           populateDropdown();
+           clearInputFields();
+           
+           logToDebugConsole(`Added embed "${embedName}"`);
+       } else {
+           alert('Please enter a valid embed code and name.');
+       }
+   }
+
+   function clearInputFields() {
+       document.getElementById("newGameUrl").value = '';
+       document.getElementById("newGameName").value = '';
+       document.getElementById("embedCode").value = '';
+       document.getElementById("embedName").value = '';
+   }
+
+   function updateGameList() {
+       const gameList = document.getElementById("gameList");
+       gameList.innerHTML = ''; 
+       contentList.forEach((content, index) => {
+           const listItem = document.createElement("div");
+           listItem.className = 'game-item';
+           
+           const contentText = document.createElement("span");
+           contentText.textContent = `${content.name} ${content.url ? `- ${content.url}` : ''}`;
+           
+           const editButton = document.createElement("button");
+           editButton.textContent = "Edit";
+           editButton.onclick = () => editContent(index);
+           
+           const deleteButton = document.createElement("button");
+           deleteButton.textContent = "Delete";
+           deleteButton.onclick = () => deleteContent(index);
+
+           listItem.appendChild(contentText);
+           listItem.appendChild(editButton);
+           listItem.appendChild(deleteButton);
+           
+           gameList.appendChild(listItem);
+           
+           logToDebugConsole(`Listed content "${content.name}"`);
+       });
+   }
+
+   function editContent(index) {
+       const contentToEdit = contentList[index];
+       
+       if (contentToEdit.url) { // If it's a game
+           document.getElementById("newGameUrl").value = contentToEdit.url;
+           document.getElementById("newGameName").value = contentToEdit.name;
+       } else { // If it's an embed
+           document.getElementById("embedCode").value = contentToEdit.embed;
+           document.getElementById("embedName").value = contentToEdit.name;
+       }
+
+       deleteContent(index);
+       logToDebugConsole(`Editing content "${contentToEdit.name}"`);
+   }
+
+   function deleteContent(index) {
+       const deletedContentName = contentList[index].name;
+       contentList.splice(index, 1); 
+       localStorage.setItem('contentList', JSON.stringify(contentList)); 
+       populateDropdown(); 
+       updateGameList(); // Update the displayed list
+       logToDebugConsole(`Deleted content "${deletedContentName}"`);
+   }
+
+   function importFromJSON(event) {
+      const fileReader = new FileReader();
+      fileReader.onload = function(event) {
+          try {
+              const importedData = JSON.parse(event.target.result); // Parse JSON data
+              if (Array.isArray(importedData)) { // Ensure it's an array
+                  contentList = importedData;
+                  localStorage.setItem('contentList', JSON.stringify(contentList)); // Update local storage
+                  populateDropdown(); // Refresh dropdown and game list
+                  logToDebugConsole('Imported content list from JSON file.');
+              } else {
+                  alert('Invalid format. Please upload a valid JSON file.');
+              }
+          } catch (error) {
+              alert('Error parsing JSON file. Please make sure it is valid.');
+              console.error(error);
+          }
+      };
+      fileReader.readAsText(event.target.files[0]); // Read the uploaded file as text
+   }
+
+   function logToDebugConsole(message) {
+       const logOutput = document.getElementById("logOutput");
+       const timestamp = new Date().toLocaleTimeString();
+       logOutput.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+       logOutput.scrollTop = logOutput.scrollHeight; // Auto-scroll to the bottom
+   }
+
+   // Hotkey functionality
+   document.addEventListener('keydown', function(event) {
+      // Check if the focused element is an input field
+      if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+          return; // Do nothing if typing in an input or textarea
+      }
+
+      switch(event.key) {
+          case 'f': // F key for fullscreen
+              toggleFullscreen();
+              event.preventDefault(); // Prevent default F key behavior
+              break;
+          case 'r': // R key to refresh
+              refreshIframe();
+              event.preventDefault();
+              break;
+          case 'p': // P key to pause
+              pauseIframe();
+              event.preventDefault();
+              break;
+          case 'l': // L key to play
+              playIframe();
+              event.preventDefault();
+              break;
+          case 'a': // A key to add a new game
+              addGame();
+              event.preventDefault();
+              break;
+          case 'e': // E key to add an embed
+              addEmbed();
+              event.preventDefault();
+              break;
+          default:
+              break;
+      }
+   });
+
+   window.onload = populateDropdown;
+
+ </script>
+
+</body>
+</html>
